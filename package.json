@@ -1,0 +1,6 @@
+{
+  "name":"sinjar-rise-of-the-sun","private":true,"version":"1.0.0","type":"module",
+  "scripts":{"dev":"vite --host 0.0.0.0","typecheck":"tsc --noEmit","test":"playwright test","build":"vite build && node scripts/offline.mjs","preview":"vite preview --host 0.0.0.0"},
+  "dependencies":{"three":"0.180.0","@dimforge/rapier3d-compat":"0.19.3","@fontsource/noto-sans-arabic":"5.2.8","@fontsource/amiri":"5.2.7"},
+  "devDependencies":{"@types/three":"0.180.0","typescript":"5.9.3","vite":"^7.3.0","@playwright/test":"^1.57.0"}
+}
