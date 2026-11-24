@@ -24,6 +24,7 @@ function syncHome(){
   el('foot-num').textContent=ordinal[progress.chapter];el('foot-title').textContent=chapters[progress.chapter].name
   document.querySelector('.chapter-pips')!.innerHTML=chapters.map((c,i)=>'<button class="'+(i===progress.chapter?'on':'')+'" data-chapter-preview="'+i+'" title="'+c.name+'" aria-label="'+c.name+'"></button>').join('')
 }
+el('guide').addEventListener('click',()=>engine?.guide())
 function applySettings(){
   document.body.classList.toggle('mirror',settings.mirror);document.body.classList.toggle('large',settings.large);document.body.classList.toggle('reduced',settings.reduce);document.documentElement.style.setProperty('--offset',settings.offset+'px')
   audio.setVolume(settings.volume);audio.setMusic(settings.music);audio.setSpeech(settings.speech)
@@ -48,7 +49,7 @@ function settingsPanel(){
 }
 function helpPanel(){
   const keys=(s:string)=>'<span class="keys">'+s.split(' ').map(k=>'<kbd>'+k+'</kbd>').join('')+'</span>'
-  showPanel('طريقة اللعب','<p>اتبع المعيّن الذهبي على الخريطة. اقترب من الشخص أو الغرض حتى يظهر فعل التفاعل. عند مرافقة أحد الناجين، انتظره عند الوصول.</p>'+[['الحركة','W A S D'],['تدوير الكاميرا','← →'],['الركض والقفز','Shift Space'],['الانحناء والتفاعل','C E'],['نداء المساندة','Q'],['الحقيبة والإيقاف','I Esc']].map(([l,k])=>'<div class="row">'+l+keys(k)+'</div>').join('')+'<p>اسحب بالفأرة أو بإصبعك لتدير الكاميرا. على الهاتف، حرّك العصا بيد واضغط أزرار الحركة باليد الأخرى. اسحب خارج الأزرار للنظر حولك.</p><p>تُحفظ كلّ مهمّة عند إكمالها. نداء المساندة يُبعد الخصم ويستهلك بعض الطاقة.</p>','help')
+  showPanel('طريقة اللعب','<p>اتبع المعيّن الذهبي على الخريطة. اقترب من الشخص أو الغرض حتى يظهر فعل التفاعل. عند مرافقة أحد الناجين، انتظره عند الوصول.</p>'+[['الحركة','W A S D'],['تدوير الكاميرا','← →'],['الركض والقفز','Shift Space'],['الانحناء والتفاعل','C E'],['السير الموجّه نحو المهمّة','G'],['نداء المساندة','Q'],['الحقيبة والإيقاف','I Esc']].map(([l,k])=>'<div class="row">'+l+keys(k)+'</div>').join('')+'<p>اسحب بالفأرة أو بإصبعك لتدير الكاميرا. على الهاتف، حرّك العصا بيد واضغط أزرار الحركة باليد الأخرى. اسحب خارج الأزرار للنظر حولك.</p><p>تُحفظ كلّ مهمّة عند إكمالها. نداء المساندة يُبعد الخصم ويستهلك بعض الطاقة.</p>','help')
 }
 function showChapters(){showPanel('اختيار الفصل','<div class="chapter-list">'+chapters.map((c,i)=>'<button class="chapter-card" style="--chapter-art:url('+base+'art/chapter-'+(i+1)+'.webp)" data-chapter-preview="'+i+'"><small>الفصل '+ordinal[i]+'</small>'+icon(i>progress.unlocked?'lock':i<progress.unlocked?'check':'book')+'<b>'+c.name+'</b></button>').join('')+'</div>','chapters')}
 function chapterDetail(i:number){const c=chapters[i];showPanel(c.name,'<div class="eyebrow">الفصل '+ordinal[i]+' · '+c.place+'</div><p>'+c.intro+'</p>'+(i<=progress.unlocked?'<button class="gold" data-chapter="'+i+'">العب الفصل</button>':'<p>'+icon('lock')+' يُفتح بعد إكمال الفصل السابق.</p>'),'chapter-detail')}
@@ -110,8 +111,8 @@ document.addEventListener('change',async event=>{
   if(input.type==='checkbox')Object.assign(settings,{[k]:input.checked});else Object.assign(settings,{[k]:Number(input.value)})
   applySettings();if(k==='quality')engine?.configure();await write('settings',settings)
 })
-document.addEventListener('keydown',e=>{if(e.code==='Escape'&&mode!=='playing'&&mode!=='loading'&&page&&page!=='intro'&&page!=='outro'){e.preventDefault();back()}if(e.code==='Tab'&&!overlay.hidden){const options=[...overlay.querySelectorAll<HTMLElement>('button:not(:disabled),select,input')];if(!options.length)return;const a=document.activeElement;if(e.shiftKey&&a===options[0]){e.preventDefault();options.at(-1)?.focus()}else if(!e.shiftKey&&a===options.at(-1)){e.preventDefault();options[0].focus()}}})
+document.addEventListener('keydown',e=>{if(e.code==='Escape'&&mode!=='playing'&&mode!=='loading'&&page&&page!=='intro'&&page!=='outro'){e.preventDefault();e.stopPropagation();back()}if(e.code==='Tab'&&!overlay.hidden){const options=[...overlay.querySelectorAll<HTMLElement>('button:not(:disabled),select,input')];if(!options.length)return;const a=document.activeElement;if(e.shiftKey&&a===options[0]){e.preventDefault();options.at(-1)?.focus()}else if(!e.shiftKey&&a===options.at(-1)){e.preventDefault();options[0].focus()}}})
 document.addEventListener('visibilitychange',()=>{if(document.hidden){if(mode==='playing')showPause();else audio.pause()}})
 for(const node of document.querySelectorAll<HTMLElement>('[data-icon]'))node.innerHTML=icon(node.dataset.icon!)
-async function init(){[settings,progress]=await Promise.all([read('settings',defaults),read('progress',initial())]);applySettings();syncHome();if(import.meta.env.PROD&&'serviceWorker' in navigator)void navigator.serviceWorker.register(base+'sw.js',{scope:base}).catch(()=>{})}
+async function init(){[settings,progress]=await Promise.all([read('settings',defaults),read('progress',initial())]);applySettings();syncHome();el<HTMLButtonElement>('start').disabled=false;if(import.meta.env.PROD&&'serviceWorker' in navigator)void navigator.serviceWorker.register(base+'sw.js',{scope:base}).catch(()=>{})}
 void init()

@@ -24,7 +24,7 @@ export function createWorld(scene: T.Scene) {
     textures.push(t)
     return t
   }
-  const diffuse = Object.fromEntries(['wall', 'mortar', 'ashlar', 'earth', 'wood', 'iron', 'rock', 'shoulder', 'ridge'].map(k => [k, texture(k)]))
+  const diffuse = Object.fromEntries(['wall', 'mortar', 'ashlar', 'wood', 'iron', 'rock', 'shoulder', 'ridge'].map(k => [k, texture(k)]))
   const normals = Object.fromEntries(['wall', 'mortar', 'ashlar', 'earth'].map(k => [k, texture(k + '-n', false)]))
   function paint(colour: T.ColorRepresentation, key?: string, roughness = .92, metalness = 0) {
     const m = new T.MeshStandardMaterial({ color: colour, roughness, metalness, map: key ? diffuse[key] : null, normalMap: key ? normals[key] || null : null, normalScale: new T.Vector2(.55,.55) })
@@ -37,6 +37,8 @@ export function createWorld(scene: T.Scene) {
   const steel = paint('#49483f',undefined,.72,.36), black = paint('#201f1b'), glass = paint('#495a56',undefined,.29,.37)
   const fadedBlue = paint('#506d6a','iron'), shutters = [fadedBlue,paint('#848477','iron'),paint('#926f52','iron')]
   const trim = paint('#b2926d'), plaster = paint('#d8bea0'), rust = paint('#865a40'), cable = paint('#322b27')
+  const headlamp=paint('#eee0bd'),carGlass=paint('#52605c',undefined,.27,.40)
+  const lampGlass=paint('#c8bc9b');lampGlass.emissive.set('#ffc47e');lampGlass.emissiveIntensity=0
   const rafter = paint('#574535','wood'), shadeCloth = [paint('#b5a078'),paint('#94705b'),paint('#7c8680')]
   const mistGrey = paint('#b4b4ac',undefined,.67,.25), rubber = paint('#302f2a')
   const labelMaterial = paint('#ffffff')
@@ -243,6 +245,13 @@ export function createWorld(scene: T.Scene) {
       window(width*.225,1.61,.045,1.34,1.02,index%2===0)
     }
     if(index%3!==1)waterTank(between(-width*.25,width*.25),h+.16,-depth*.65)
+    if(index%2===0 || shelter) {
+      const lx=-width*.38
+      box(lx,2.59,.15,.13,.20,.12,steel)
+      rod([lx,2.64,.16],[lx,2.64,.44],.022,steel)
+      rod([lx,2.59,.42],[lx,2.46,.42],.112,steel,.055,8)
+      rod([lx,2.31,.42],[lx,2.47,.42],.065,lampGlass,.097,8)
+    }
     // Metal downpipe, bands and a partly detached outlet.
     const px=width*.5-.24
     rod([px,.31,.20],[px,h+.20,.20],.045,mistGrey)
@@ -362,7 +371,7 @@ export function createWorld(scene: T.Scene) {
       g.rotateY(-Math.PI/2);g.translate(width*.5,0,0);emit(g,mat)
     }
     profile([[-2.04,.46],[-2.05,.75],[-1.73,.84],[-.86,.89],[.96,.88],[1.93,.79],[2.04,.68],[2.00,.44]],1.63,body)
-    profile([[-1.05,.87],[-.49,1.41],[.43,1.45],[1.02,.89]],1.43,glass)
+    profile([[-1.05,.87],[-.49,1.41],[.43,1.45],[1.02,.89]],1.43,carGlass)
     box(0,1.455,.01,1.45,.073,1.01,body)
     for(const sign of [-1,1]){
       const xx=sign*.76
@@ -374,7 +383,7 @@ export function createWorld(scene: T.Scene) {
         rod([sign*.914,.398,zz],[sign*.93,.398,zz],.186,steel,.18,12)
         rod([sign*.93,.398,zz],[sign*.947,.398,zz],.091,mistGrey,.081,8)
       }
-      box(sign*.66,.71,-2.055,.28,.115,.042,plaster)
+      box(sign*.66,.71,-2.055,.28,.115,.042,headlamp)
       box(sign*.65,.69,2.025,.29,.125,.04,rust)
       box(sign*.83,.81,.12,.034,.037,.16,mistGrey)
       box(sign*.83,.81,.81,.034,.037,.16,mistGrey)
@@ -507,6 +516,14 @@ export function createWorld(scene: T.Scene) {
   dustGeometry.setAttribute('position',new T.BufferAttribute(dustData,3))
   const dustMat=new T.PointsMaterial({size:.049,color:'#f8ddaf',transparent:true,opacity:.48,depthWrite:false})
   materials.push(dustMat);const dust=new T.Points(dustGeometry,dustMat);root.add(dust)
+  const starGeo=new T.BufferGeometry(),starPositions:number[]=[]
+  for(let i=0;i<350;i++){
+    const az=between(0,Math.PI*2),h=between(.08,1.48),r=151
+    starPositions.push(r*Math.cos(h)*Math.cos(az),r*Math.sin(h),r*Math.cos(h)*Math.sin(az))
+  }
+  starGeo.setAttribute('position',new T.Float32BufferAttribute(starPositions,3))
+  const starMat=new T.PointsMaterial({color:'#dddccf',size:.13,opacity:.62,transparent:true,fog:false,depthWrite:false})
+  materials.push(starMat);const stars=new T.Points(starGeo,starMat);root.add(stars)
   let previousChapter=-1,quality=2
   const palette=[
     ['#ffe1ae','#c5b7a5',2.24,1.45,.98],['#f0ba88','#ac9b89',1.80,1.24,.83],['#ffda9f','#b9a78f',2.40,1.43,.95],
@@ -528,6 +545,11 @@ export function createWorld(scene: T.Scene) {
       const [light,far,sunlight,skyLight,skyBrightness]=palette[c]
       sun.color.set(light);sun.intensity=sunlight;hemi.intensity=skyLight;fog.color.set(far)
       hemi.color.set(c===3||c===5?'#96abd0':'#e9e6e1')
+      const night=c===3||c===5
+      stars.visible=night;lampGlass.emissiveIntensity=night?2.0:.02
+      glass.emissive.set('#8b653b');glass.emissiveIntensity=night?.41:0
+      const direction:V[]=[[-24,25,-34],[-12,44,-23],[27,16,-22],[18,26,31], [23,11,-27],[-18,27,31],[-27,15,-32]]
+      sun.position.set(...direction[c]);sun.shadow.needsUpdate=true
       fog.density=c===1?.014:.0095;scene.backgroundIntensity=skyBrightness
       scene.environmentIntensity=skyBrightness*.28
       previousChapter=c

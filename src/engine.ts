@@ -2,6 +2,7 @@ import * as T from 'three'
 import R from '@dimforge/rapier3d-compat'
 import {createActor,type Actor,type ActorAction} from './actors'
 import {createWorld} from './world'
+import {walkingPath} from './path'
 import {GameAudio} from './audio'
 import {chapters,actionLabel,arabic,type Task} from './story'
 import type {Settings} from './save'
@@ -58,6 +59,7 @@ class Game {
   private temp=new T.Vector3()
   private aim=new T.Vector3()
   private trail:T.Vector3[]=[]
+  private route:{x:number;z:number}[]=[]
   private quality=1
   private ratio=1
   private perfTime=0
@@ -106,6 +108,7 @@ class Game {
   private setTask(){
     const t=this.task
     this.waypoint.position.set(t.x,0,t.z);this.targetP.set(t.x,2.25,t.z)
+    this.route=[]
     this.cast[1].root.visible=['talk','help','escort','defend'].includes(t.kind)
     this.cast[1].root.position.set(t.x+.55,0,t.z-.3);this.cast[1].root.rotation.y=.2;this.cast[1].setAction(t.kind==='help'?'crouch':'idle')
     this.cast[2].root.visible=this.escort||[2,3,5,6].includes(this.chapter)
@@ -142,7 +145,7 @@ class Game {
     const down=(e:KeyboardEvent)=>{if(!this.running||e.ctrlKey||e.metaKey||e.altKey)return
       const code=e.code;if(['Space','KeyW','KeyS','KeyA','KeyD','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Tab'].includes(code))e.preventDefault()
       this.keys.add(code);if(e.repeat)return
-      if(code==='KeyE')this.interact();if(code==='KeyQ')this.pulse();if(code==='Space')this.jump();if(code==='KeyC')this.crouched=!this.crouched
+      if(code==='KeyG')this.guide();if(code==='KeyE')this.interact();if(code==='KeyQ')this.pulse();if(code==='Space')this.jump();if(code==='KeyC')this.crouched=!this.crouched
       if(code==='Escape')this.hooks.pause();if(code==='Tab'||code==='KeyI')this.hooks.bag()
     }
     window.addEventListener('keydown',down,{signal});window.addEventListener('keyup',e=>this.keys.delete(e.code),{signal})
@@ -161,6 +164,13 @@ class Game {
     el('interact-prompt').addEventListener('click',()=>this.interact(),{signal})
     canvas.addEventListener('webglcontextlost',e=>{e.preventDefault();this.hooks.pause();this.hooks.notice('توقّف عرض الرسوم. أعد تحميل الصفحة لاستعادة آخر نقطة حفظ.')},{signal})
   }
+  guide(){
+    if(!this.running)return
+    if(this.route.length){this.route=[];return}
+    const p=this.player.position
+    this.route=walkingPath(p.x,p.z,this.task.x,this.task.z,this.terrain.colliders)
+    if(this.route.length)this.hooks.notice('بدأ السير الموجّه · حرّك العصا أو استخدم مفاتيح الحركة لإيقافه')
+  }
   private jump(){if(this.onGround&&!this.pending){this.jumpSpeed=5.8;this.onGround=false;this.crouched=false}}
   private pulse(){if(!this.running||this.pulseAge<1.4||this.stamina<12)return
     this.stamina-=12;this.pulseAge=0;this.pose='signal';this.poseTime=.6;this.pulseMesh.visible=true;this.pulseMesh.position.copy(this.player.position);this.pulseMesh.position.y+=.08;this.audio.cue('pulse')
@@ -174,7 +184,7 @@ class Game {
     if(this.dist()>2.65){this.terrain.interact?.(this.player.position.x,this.player.position.z);this.hooks.notice('اقترب من العلامة الذهبية للتفاعل');return}
     if(this.escort&&this.cast[2].root.position.distanceTo(this.player.position)>4.5){this.hooks.notice('انتظر وصول رفيقك');return}
     if(t.kind==='defend'&&!this.repelled){this.pulse();if(!this.repelled){this.hooks.notice('انتظر اقتراب الخصم ثم أطلق النداء');return}}
-    this.pending=t.kind==='climb'?1.5:.9;this.poseTime=this.pending;const actions:Partial<Record<Task['kind'],ActorAction>>={help:'help',supply:'carry',climb:'climb',defend:'signal',repair:'help'}
+    this.route=[];this.pending=t.kind==='climb'?1.5:.9;this.poseTime=this.pending;const actions:Partial<Record<Task['kind'],ActorAction>>={help:'help',supply:'carry',climb:'climb',defend:'signal',repair:'help'}
     this.pose=actions[t.kind]||'interact';this.audio.cue(t.kind==='open'?'creak':t.kind==='defend'?'radio':'success',t.x,t.z)
     if(this.settings.haptic)navigator.vibrate?.(30)
     this.player.rotation.y=Math.atan2(t.x-this.player.position.x,t.z-this.player.position.z)
@@ -197,6 +207,13 @@ class Game {
     let front=Number(this.keys.has('KeyW')||this.keys.has('ArrowUp'))-Number(this.keys.has('KeyS')||this.keys.has('ArrowDown'))+this.stick.y
     let side=Number(this.keys.has('KeyD'))-Number(this.keys.has('KeyA'))+this.stick.x
     this.yaw+=(Number(this.keys.has('ArrowRight'))-Number(this.keys.has('ArrowLeft')))*dt*1.8
+    if(front||side)this.route=[]
+    if(this.route.length&&!this.pending){
+      const p=this.player.position,next=this.route[0],dx=next.x-p.x,dz=next.z-p.z,range=Math.hypot(dx,dz)
+      if(this.dist()<1.45)this.route=[]
+      else if(range<.24)this.route.shift()
+      else {this.yaw=Math.atan2(dx,-dz);front=Math.min(1,range/(3.3*dt));side=0}
+    }
     if(this.pending){front=0;side=0}const length=Math.hypot(front,side)
     if(length>1){front/=length;side/=length}
     const sprint=(this.keys.has('ShiftLeft')||this.keys.has('ShiftRight')||this.sprintTouch)&&length>.1&&!this.crouched&&this.stamina>1
@@ -246,6 +263,11 @@ class Game {
     const len=dir.length();dir.normalize()
     const hit=this.physics.castRay(new R.Ray(this.aim,dir),len,true,undefined,undefined,this.collider)
     dir.multiplyScalar(hit?Math.max(.35,hit.timeOfImpact-.17):len).add(this.aim)
+    if(this.pending>0&&!this.settings.reduce){
+      const close=this.targetP.clone().lerp(this.aim,.5);close.y=1.42
+      const sideView=this.temp.set(p.x+Math.cos(a)*2.25,1.65,p.z+Math.sin(a)*2.25)
+      this.camera.position.lerp(sideView,1-Math.exp(-dt*3));this.camera.lookAt(close);return
+    }
     this.camera.position.lerp(dir,1-Math.exp(-dt*14));this.camera.lookAt(p.x+Math.sin(a)*2,p.y+focusY-.05,p.z-Math.cos(a)*2)
   }
   private updateHud(){
