@@ -1,7 +1,108 @@
-export interface Progress {chapter:number;step:number;unlocked:number;items:string[];water:number;bandages:number;done:boolean;time:number}
-export interface Settings {volume:number;music:boolean;speech:boolean;subs:boolean;sensitivity:number;quality:number;difficulty:number;first:boolean;haptic:boolean;mirror:boolean;offset:number;large:boolean;reduce:boolean;guide:boolean;assist:boolean;portrait:string;cloth:string;buttons:Record<string,[number,number]>}
-export const initial=():Progress=>({chapter:0,step:0,unlocked:0,items:[],water:1,bandages:1,done:false,time:0})
-export const defaults:Settings={volume:.55,music:true,speech:false,subs:true,sensitivity:1,quality:-1,difficulty:1,first:false,haptic:true,mirror:false,offset:0,large:false,reduce:matchMedia('(prefers-reduced-motion:reduce)').matches,guide:true,assist:true,portrait:'',cloth:'',buttons:{}}
-const db:Promise<IDBDatabase|null>=new Promise(resolve=>{try{const r=indexedDB.open('sinjar-sun',1);r.onupgradeneeded=()=>r.result.createObjectStore('journal');r.onsuccess=()=>resolve(r.result);r.onerror=()=>resolve(null);r.onblocked=()=>resolve(null)}catch{resolve(null)}})
-export async function read<T>(key:string,fallback:T):Promise<T>{const d=await db;try{if(d){return await new Promise<T>((resolve,reject)=>{const r=d.transaction('journal').objectStore('journal').get(key);r.onsuccess=()=>resolve({...fallback,...r.result});r.onerror=()=>reject(r.error)})}}catch{}try{return {...fallback,...JSON.parse(localStorage.getItem('sun-'+key)||'{}')}}catch{return fallback}}
-export async function write(key:string,value:unknown){const d=await db;if(d){try{await new Promise<void>((resolve,reject)=>{const t=d.transaction('journal','readwrite');t.objectStore('journal').put(value,key);t.oncomplete=()=>resolve();t.onabort=t.onerror=()=>reject(t.error)});return true}catch{}}try{localStorage.setItem('sun-'+key,JSON.stringify(value));return true}catch{return false}}
+export interface Progress {
+  chapter: number
+  step: number
+  unlocked: number
+  items: string[]
+  water: number
+  bandages: number
+  done: boolean
+  time: number
+}
+export interface Settings {
+  volume: number
+  music: boolean
+  speech: boolean
+  subs: boolean
+  sensitivity: number
+  quality: number
+  difficulty: number
+  first: boolean
+  haptic: boolean
+  mirror: boolean
+  offset: number
+  large: boolean
+  reduce: boolean
+  guide: boolean
+  assist: boolean
+  portrait: string
+  cloth: string
+  buttons: Record<string, [number, number]>
+}
+export const initial = (): Progress => ({
+  chapter: 0,
+  step: 0,
+  unlocked: 0,
+  items: [],
+  water: 1,
+  bandages: 1,
+  done: false,
+  time: 0,
+})
+export const defaults: Settings = {
+  volume: 0.55,
+  music: true,
+  speech: false,
+  subs: true,
+  sensitivity: 1,
+  quality: -1,
+  difficulty: 1,
+  first: false,
+  haptic: true,
+  mirror: false,
+  offset: 0,
+  large: false,
+  reduce: matchMedia('(prefers-reduced-motion:reduce)').matches,
+  guide: true,
+  assist: true,
+  portrait: '',
+  cloth: '',
+  buttons: {},
+}
+const db: Promise<IDBDatabase | null> = new Promise((resolve) => {
+  try {
+    const r = indexedDB.open('sinjar-sun', 1)
+    r.onupgradeneeded = () => r.result.createObjectStore('journal')
+    r.onsuccess = () => resolve(r.result)
+    r.onerror = () => resolve(null)
+    r.onblocked = () => resolve(null)
+  } catch {
+    resolve(null)
+  }
+})
+export async function read<T>(key: string, fallback: T): Promise<T> {
+  const d = await db
+  try {
+    if (d) {
+      return await new Promise<T>((resolve, reject) => {
+        const r = d.transaction('journal').objectStore('journal').get(key)
+        r.onsuccess = () => resolve({ ...fallback, ...r.result })
+        r.onerror = () => reject(r.error)
+      })
+    }
+  } catch {}
+  try {
+    return { ...fallback, ...JSON.parse(localStorage.getItem('sun-' + key) || '{}') }
+  } catch {
+    return fallback
+  }
+}
+export async function write(key: string, value: unknown) {
+  const d = await db
+  if (d) {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const t = d.transaction('journal', 'readwrite')
+        t.objectStore('journal').put(value, key)
+        t.oncomplete = () => resolve()
+        t.onabort = t.onerror = () => reject(t.error)
+      })
+      return true
+    } catch {}
+  }
+  try {
+    localStorage.setItem('sun-' + key, JSON.stringify(value))
+    return true
+  } catch {
+    return false
+  }
+}
