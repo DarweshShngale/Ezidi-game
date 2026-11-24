@@ -8,6 +8,7 @@ export interface Actor {
   root: Group;
   setAction(name: ActorAction): void;
   update(deltaSeconds: number): void;
+  setCloth(color: string): void;
   dispose(): void;
 }
 
@@ -49,10 +50,10 @@ export async function createActor(role: ActorRole = 'sumer', variation = 0): Pro
     node.receiveShadow = true;
     function tint(material: MeshStandardMaterial): MeshStandardMaterial {
       const value = (colors as Record<string, string>)[material.name];
-      if (!value) return material;
+      if (!value && !(role === 'sumer' && material.name === 'scarf')) return material;
       if (!owned.has(material)) {
         const local = material.clone();
-        local.color.set(value);
+        if(value)local.color.set(value);
         owned.set(material, local);
       }
       return owned.get(material)!;
@@ -78,6 +79,7 @@ export async function createActor(role: ActorRole = 'sumer', variation = 0): Pro
   mixer.update(role === 'sumer' ? 0.01 : 0.07 + index * 0.47);
   return {
     root, setAction,
+    setCloth(color) { for (const [source,local] of owned) if (source.name === 'scarf') { if (color) local.color.set(color); else local.color.copy(source.color) } },
     update(deltaSeconds) { mixer.update(Math.min(deltaSeconds, 0.15)); },
     dispose() {
       root.removeFromParent();

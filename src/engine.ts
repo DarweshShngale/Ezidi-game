@@ -12,13 +12,13 @@ const clamp=T.MathUtils.clamp
 const rapier=R.init()
 export async function buildGame(settings:Settings,audio:GameAudio,hooks:Hooks){
   await rapier
-  const cast=await Promise.all([createActor('sumer'),createActor('civilian',0),createActor('companion',1),createActor('opponent'),createActor('civilian',2)])
+  const cast=await Promise.all([createActor('sumer'),createActor('civilian',0),createActor('companion',1),createActor('opponent'),createActor('civilian',2),createActor('civilian',3),createActor('civilian',0)])
   return new Game(cast,settings,audio,hooks)
 }
 export type Engine=Awaited<ReturnType<typeof buildGame>>
 class Game {
   private scene=new T.Scene()
-  private renderer=new T.WebGLRenderer({antialias:false,alpha:false,powerPreference:'high-performance'})
+  private renderer=new T.WebGLRenderer({antialias:!matchMedia('(pointer:coarse)').matches,alpha:false,powerPreference:'high-performance'})
   private camera=new T.PerspectiveCamera(57,1,.09,320)
   private terrain=createWorld(this.scene)
   private physics=new R.World({x:0,y:-15,z:0})
@@ -86,9 +86,14 @@ class Game {
   }
   private get player(){return this.cast[0].root}
   private get task(){return chapters[this.chapter].tasks[this.step]}
+  private get companion(){return [1,5].includes(this.chapter)?this.cast[6]:this.cast[2]}
+  private get speaker(){return [0,1,5,6].includes(this.chapter)?this.cast[1]:this.cast[5]}
   private get escort(){return this.task.kind==='escort'}
   private get danger(){return (this.chapter===3&&this.task.kind==='defend')||(this.chapter===4&&this.step===1)}
+  outfit(){this.cast[0].setCloth(this.settings.cloth)}
+  replenish(water:boolean){if(water){if(this.stamina>=99)return false;this.stamina=100}else{if(this.health>=99)return false;this.health=Math.min(100,this.health+45)}this.updateHud();return true}
   configure(){
+    this.outfit()
     const auto=matchMedia('(pointer:coarse)').matches?0:(navigator.hardwareConcurrency||4)>=8?2:1
     this.quality=this.settings.quality<0?auto:this.settings.quality
     this.ratio=Math.min(devicePixelRatio,[.85,1.05,1.5,1.85][this.quality]);this.renderer.shadowMap.enabled=this.quality>0;this.terrain.setQuality(this.quality)
@@ -100,7 +105,7 @@ class Game {
     const tasks=chapters[chapter].tasks, prev=tasks[step-1]
     const x=prev?.x||0,z=prev?prev.z+1:14
     this.body.setTranslation({x,y:.88,z},true);this.body.setNextKinematicTranslation({x,y:.88,z});this.physics.step();this.player.position.set(x,0,z);this.player.rotation.y=Math.PI
-    this.cast[2].root.position.set(x+.8,0,z+1.5);this.trail=[]
+    this.companion.root.position.set(x+.8,0,z+1.5);this.trail=[]
     this.cast[4].root.position.set(-2.6,0,-4);this.cast[4].root.rotation.y=.5
     this.setTask();this.cine=this.settings.reduce?0:1.4;this.camera.position.set(x+4,3.2,z+5.4);this.updateCamera(1)
   }
@@ -109,9 +114,11 @@ class Game {
     const t=this.task
     this.waypoint.position.set(t.x,0,t.z);this.targetP.set(t.x,2.25,t.z)
     this.route=[]
-    this.cast[1].root.visible=['talk','help','escort','defend'].includes(t.kind)
-    this.cast[1].root.position.set(t.x+.55,0,t.z-.3);this.cast[1].root.rotation.y=.2;this.cast[1].setAction(t.kind==='help'?'crouch':'idle')
-    this.cast[2].root.visible=this.escort||[2,3,5,6].includes(this.chapter)
+    for(const i of [1,2,5,6])this.cast[i].root.visible=false
+    this.speaker.root.visible=['talk','help','defend'].includes(t.kind)
+    this.speaker.root.position.set(t.x+.55,0,t.z-.3);this.speaker.root.rotation.y=.2;this.speaker.setAction(t.kind==='help'?'crouch':'idle')
+    this.companion.root.visible=this.escort||[3,6].includes(this.chapter)
+    if(this.escort){const p=this.player.position;this.companion.root.position.set(p.x+.8,p.y,p.z+.9);this.trail=[]}
     this.cast[3].root.visible=this.danger;this.cast[3].root.position.set(t.x-1.5,0,t.z-2)
     this.cast[4].root.visible=this.chapter!==4;this.repelled=false;this.retreat=0;this.dangerCooldown=0
     this.buildLandmark(t);this.updateHud()
@@ -182,7 +189,7 @@ class Game {
     if(!this.running||this.pending)return
     const t=this.task
     if(this.dist()>2.65){this.terrain.interact?.(this.player.position.x,this.player.position.z);this.hooks.notice('اقترب من العلامة الذهبية للتفاعل');return}
-    if(this.escort&&this.cast[2].root.position.distanceTo(this.player.position)>4.5){this.hooks.notice('انتظر وصول رفيقك');return}
+    if(this.escort&&this.companion.root.position.distanceTo(this.player.position)>4.5){this.hooks.notice('انتظر وصول رفيقك');return}
     if(t.kind==='defend'&&!this.repelled){this.pulse();if(!this.repelled){this.hooks.notice('انتظر اقتراب الخصم ثم أطلق النداء');return}}
     this.route=[];this.pending=t.kind==='climb'?1.5:.9;this.poseTime=this.pending;const actions:Partial<Record<Task['kind'],ActorAction>>={help:'help',supply:'carry',climb:'climb',defend:'signal',repair:'help'}
     this.pose=actions[t.kind]||'interact';this.audio.cue(t.kind==='open'?'creak':t.kind==='defend'?'radio':'success',t.x,t.z)
@@ -233,7 +240,7 @@ class Game {
     if(length>.1&&this.onGround){this.gait+=dt*speed;if(this.gait>1.3){this.gait=0;this.audio.step(next.x,next.z,next.z< -12?'earth':Math.abs(next.x)>7?'wood':'stone')}}
   }
   private updateActors(dt:number){
-    const p=this.player.position,companion=this.cast[2],enemy=this.cast[3];this.pulseAge+=dt
+    const p=this.player.position,companion=this.companion,enemy=this.cast[3];this.pulseAge+=dt
     if(this.pulseMesh.visible){this.pulseMesh.scale.setScalar(.2+this.pulseAge*7);(this.pulseMesh.material as T.MeshBasicMaterial).opacity=Math.max(0,1-this.pulseAge);if(this.pulseAge>=1)this.pulseMesh.visible=false}
     if(companion.root.visible){
       if(!this.trail.length||this.trail[this.trail.length-1].distanceTo(p)>.55)this.trail.push(p.clone())
@@ -258,7 +265,7 @@ class Game {
     const focusY=this.crouched?1.1:1.56
     if(this.settings.first){this.camera.position.set(p.x,p.y+focusY,p.z);this.camera.lookAt(p.x+Math.sin(this.yaw),p.y+focusY-this.pitch+.2,p.z-Math.cos(this.yaw));return}
     this.aim.set(p.x,p.y+focusY,p.z)
-    const a=this.yaw+this.cine*.35,dist=3.6+this.cine*.7
+    const a=this.yaw+this.cine*.35,dist=4.35+this.cine*.7
     const dir=this.temp.set(-Math.sin(a)*dist+.38*Math.cos(a),.48+this.pitch*2.6,Math.cos(a)*dist+.38*Math.sin(a))
     const len=dir.length();dir.normalize()
     const hit=this.physics.castRay(new R.Ray(this.aim,dir),len,true,undefined,undefined,this.collider)

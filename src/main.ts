@@ -1,4 +1,5 @@
 import './style.css'
+import {placeButtons,editButtons} from './touch-layout'
 import {icon} from './icons'
 import {chapters,ordinal,arabic} from './story'
 import {defaults,initial,read,write,type Settings} from './save'
@@ -26,6 +27,7 @@ function syncHome(){
 }
 el('guide').addEventListener('click',()=>engine?.guide())
 function applySettings(){
+  placeButtons(settings.buttons);engine?.outfit()
   document.body.classList.toggle('mirror',settings.mirror);document.body.classList.toggle('large',settings.large);document.body.classList.toggle('reduced',settings.reduce);document.documentElement.style.setProperty('--offset',settings.offset+'px')
   audio.setVolume(settings.volume);audio.setMusic(settings.music);audio.setSpeech(settings.speech)
   el('sound').innerHTML=icon(settings.volume?'sound':'mute');el('sound').setAttribute('aria-label',settings.volume?'كتم الصوت':'تشغيل الصوت');if(!settings.subs)el('dialogue').hidden=true
@@ -45,7 +47,7 @@ function settingsPanel(){
   const range=(id:keyof Settings,label:string,min:number,max:number,step:number)=>'<label class="setting">'+label+'<input type="range" min="'+min+'" max="'+max+'" step="'+step+'" value="'+settings[id]+'" data-setting="'+id+'"></label>'
   showPanel('الإعدادات','<h3>الصورة واللعب</h3>'+sel('quality','جودة الرسوم',[[-1,'تلقائية'],[0,'منخفضة'],[1,'متوسطة'],[2,'عالية'],[3,'فائقة']])+sel('difficulty','الصعوبة',[[0,'هادئة'],[1,'عادية'],[2,'صعبة']])+check('first','منظور الشخص الأول')+check('guide','إظهار علامة الهدف على الخريطة')+check('assist','توسيع نطاق نداء المساندة')+
   '<h3>الصوت وإمكانية الوصول</h3>'+range('volume','مستوى الصوت',0,1,.05)+check('music','الموسيقى التصويرية')+check('speech','قراءة الحوار بصوت عربي متاح على الجهاز')+check('subs','ترجمة الحوار')+check('large','تكبير النص')+check('reduce','تقليل حركة الكاميرا')+
-  '<h3>التحكّم باللمس</h3>'+range('sensitivity','حساسية الكاميرا',.3,2.5,.1)+check('haptic','اهتزاز عند التفاعل')+check('mirror','تبديل جهة عصا الحركة')+range('offset','ارتفاع الأزرار',0,50,2)+'<h3>صورة سومر في دفتر الرحلة</h3><label class="setting">صورة مرجعية من جهازك<input type="file" id="reference" accept="image/*"></label>'+(settings.portrait?btn('clear-portrait','إزالة الصورة'):'')+'<div class="row">'+btn('full','ملء الشاشة')+btn('back','تمّ',true)+'</div>','settings')
+  '<h3>التحكّم باللمس</h3>'+range('sensitivity','حساسية الكاميرا',.3,2.5,.1)+check('haptic','اهتزاز عند التفاعل')+check('mirror','تبديل جهة عصا الحركة')+range('offset','ارتفاع الأزرار',0,50,2)+btn('layout','تخصيص مواضع الأزرار')+'<h3>مظهر سومر</h3><p class="note">تظهر صورتك في دفتر الرحلة ويُستوحى منها لون وشاح سومر.</p><label class="setting">صورة مرجعية من جهازك<input type="file" id="reference" accept="image/*"></label>'+(settings.portrait?btn('clear-portrait','إزالة الصورة'):'')+'<div class="row">'+btn('full','ملء الشاشة')+btn('back','تمّ',true)+'</div>','settings')
 }
 function helpPanel(){
   const keys=(s:string)=>'<span class="keys">'+s.split(' ').map(k=>'<kbd>'+k+'</kbd>').join('')+'</span>'
@@ -53,7 +55,8 @@ function helpPanel(){
 }
 function showChapters(){showPanel('اختيار الفصل','<div class="chapter-list">'+chapters.map((c,i)=>'<button class="chapter-card" style="--chapter-art:url('+base+'art/chapter-'+(i+1)+'.webp)" data-chapter-preview="'+i+'"><small>الفصل '+ordinal[i]+'</small>'+icon(i>progress.unlocked?'lock':i<progress.unlocked?'check':'book')+'<b>'+c.name+'</b></button>').join('')+'</div>','chapters')}
 function chapterDetail(i:number){const c=chapters[i];showPanel(c.name,'<div class="eyebrow">الفصل '+ordinal[i]+' · '+c.place+'</div><p>'+c.intro+'</p>'+(i<=progress.unlocked?'<button class="gold" data-chapter="'+i+'">العب الفصل</button>':'<p>'+icon('lock')+' يُفتح بعد إكمال الفصل السابق.</p>'),'chapter-detail')}
-function bag(){if(mode==='playing'){mode='paused';engine?.stop()}showPanel('دفتر الرحلة',(settings.portrait?'<img class="portrait" alt="صورة سومر" src="'+htmlEsc(settings.portrait)+'">':'')+'<div class="eyebrow">سومر · الفصل '+ordinal[progress.chapter]+'</div><h3>مقتنيات الرحلة</h3>'+(progress.items.length?progress.items.map(name=>'<div class="row">'+htmlEsc(name)+icon('book')+'</div>').join(''):'<p>ستظهر هنا الوثائق والمؤن التي تجمعها.</p>')+btn('back','رجوع'),'bag')}
+function bag(){if(mode==='playing'){mode='paused';engine?.stop()}showPanel('دفتر الرحلة',(settings.portrait?'<img class="portrait" alt="صورة سومر" src="'+htmlEsc(settings.portrait)+'">':'')+'<div class="eyebrow">سومر · الفصل '+ordinal[progress.chapter]+'</div><h3>مقتنيات الرحلة</h3>'+(progress.items.length?progress.items.map(name=>'<div class="row">'+htmlEsc(name)+icon('book')+'</div>').join(''):'<p>ستظهر هنا الوثائق والمؤن التي تجمعها.</p>')+'<h3>المؤن</h3><div class="row"><span>ماء · '+arabic(progress.water)+'</span>'+btn('drink','اشرب لاستعادة الطاقة')+'</div><div class="row"><span>ضمادات · '+arabic(progress.bandages)+'</span>'+btn('bandage','استعمل ضمادة')+'</div>'+btn('back','رجوع'),'bag')}
+function useSupply(water:boolean){const key=water?'water':'bandages';if(progress[key]<1){announce('نفدت هذه المؤن');return}if(!engine?.replenish(water)){announce(water?'طاقتك مكتملة':'صحّتك مكتملة');return}progress[key]--;void save();bag();announce(water?'استعدت طاقتك':'استعدت بعض صحّتك')}
 function subtitle(who:string,line:string){
   audio.dialogue(line);clearTimeout(subTimer)
   if(!settings.subs)return
@@ -82,6 +85,7 @@ async function enter(){
 }
 function completeTask(){
   const c=chapters[progress.chapter],t=c.tasks[progress.step]
+  if(t.item==='قربة ماء')progress.water+=2;if(t.item==='ضمادات العيادة')progress.bandages+=2
   if(t.item&&!progress.items.includes(t.item))progress.items.push(t.item)
   if(progress.step===c.tasks.length-1){
     progress.unlocked=Math.max(progress.unlocked,Math.min(6,progress.chapter+1))
@@ -97,16 +101,17 @@ function completeTask(){
 async function next(){if(progress.chapter===6){goHome();return}progress.chapter++;progress.step=0;await save();film(false)}
 async function fullscreen(){try{if(document.fullscreenElement){await document.exitFullscreen();return}await document.documentElement.requestFullscreen();const o=screen.orientation as ScreenOrientation&{lock?:(v:string)=>Promise<void>};await o?.lock?.('landscape').catch(()=>{})}catch{announce('أدِر جهازك أفقياً لتوسيع ساحة اللعب')}}
 const commands:Record<string,()=>unknown>={
-  full:fullscreen,chapters:showChapters,settings:settingsPanel,help:helpPanel,pause:showPause,resume,back,bag,home:goHome,enter,retry:enter,next,
+  drink:()=>useSupply(true),bandage:()=>useSupply(false),full:fullscreen,chapters:showChapters,settings:settingsPanel,help:helpPanel,pause:showPause,resume,back,bag,home:goHome,enter,retry:enter,next,
   about:()=>showPanel('عن اللعبة','<p>سنجار – صمود الشمس مغامرة قصصية عن سومر، شاب إيزيدي يحاول جمع عائلته وحماية جيرانه في سنجار.</p><p>تستلهم القصة ذاكرة الإبادة التي ارتكبها داعش بحقّ الإيزيديين في آب ٢٠١٤. الشخصيات والحيّ والمواقف خيالية. تحضر الشمس والطاووس والكتابات الجدارية في مواضع تحترم معناها.</p><p>إلى أهل سنجار، وإلى العائلات التي ما زالت تنتظر عودة أحبّتها.</p>','about'),
-  'clear-portrait':()=>{settings.portrait='';void write('settings',settings);settingsPanel()},
+  layout:()=>{editButtons(settings.buttons,positions=>{settings.buttons=positions;applySettings();void write('settings',settings);settingsPanel()})},
+  'clear-portrait':()=>{settings.cloth='';settings.portrait='';applySettings();void write('settings',settings);settingsPanel()},
   'new-confirm':()=>{progress={...initial(),unlocked:progress.unlocked};void startChapter(0,true)}
 }
 function start(){if(progress.time&&!progress.done)showPanel('بدء رحلة جديدة','<p>سيبدأ سومر من الفصل الأول. ستبقى الفصول التي فتحتها متاحة للاختيار.</p><div class="hero-actions">'+btn('new-confirm','ابدأ من جديد',true)+btn('back','رجوع')+'</div>','confirm');else commands['new-confirm']()}
 document.addEventListener('click',e=>{const b=(e.target as Element).closest<HTMLButtonElement>('button');if(!b||b.disabled)return;if(b.dataset.do){commands[b.dataset.do]?.();return}if(b.dataset.chapterPreview!==undefined){chapterDetail(Number(b.dataset.chapterPreview));return}if(b.dataset.chapter!==undefined){void startChapter(Number(b.dataset.chapter),true);return}if(b.id==='start')start();if(b.id==='continue'){if(progress.step===0)film(false);else void enter()}if(b.id==='sound'){settings.volume=settings.volume?0:.55;applySettings();if(settings.volume)void audio.start();else audio.pause();void write('settings',settings)}})
 document.addEventListener('change',async event=>{
   const input=event.target as HTMLInputElement
-  if(input.id==='reference'&&input.files?.[0]){try{const image=await createImageBitmap(input.files[0]);const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const size=Math.min(image.width,image.height);canvas.getContext('2d')!.drawImage(image,(image.width-size)/2,(image.height-size)/2,size,size,0,0,128,128);image.close();settings.portrait=canvas.toDataURL('image/jpeg',.78);await write('settings',settings);settingsPanel()}catch{announce('تعذّرت قراءة الصورة')}return}
+  if(input.id==='reference'&&input.files?.[0]){try{const image=await createImageBitmap(input.files[0]);const canvas=document.createElement('canvas');canvas.width=canvas.height=128;const size=Math.min(image.width,image.height);canvas.getContext('2d')!.drawImage(image,(image.width-size)/2,(image.height-size)/2,size,size,0,0,128,128);image.close();const pixels=canvas.getContext('2d')!.getImageData(32,72,64,48).data;const rgb=[0,0,0];for(let n=0;n<pixels.length;n+=4)for(let j=0;j<3;j++)rgb[j]+=pixels[n+j];settings.cloth='#'+rgb.map(v=>Math.round(v/(pixels.length/4)).toString(16).padStart(2,'0')).join('');engine?.outfit();settings.portrait=canvas.toDataURL('image/jpeg',.78);await write('settings',settings);settingsPanel()}catch{announce('تعذّرت قراءة الصورة')}return}
   const k=input.dataset.setting as keyof Settings;if(!k)return
   if(input.type==='checkbox')Object.assign(settings,{[k]:input.checked});else Object.assign(settings,{[k]:Number(input.value)})
   applySettings();if(k==='quality')engine?.configure();await write('settings',settings)
